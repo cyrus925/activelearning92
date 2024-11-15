@@ -1,0 +1,157 @@
+import numpy as np
+from sklearn.decomposition import PCA
+from sklearn.cluster import KMeans
+from sklearn.metrics import silhouette_score, davies_bouldin_score
+import matplotlib.pyplot as plt
+from sklearn.model_selection import train_test_split
+from sklearn.ensemble import RandomForestClassifier
+
+def extract_features(images):
+    # Placeholder for your feature extraction method
+    # features should be a numpy array with dimensions (n_images, n_features)
+    return np.random.rand(len(images), 128)  # Dummy feature matrix
+
+def reduce_dimensionality(features, n_components=22):
+    pca = PCA(n_components=n_components)
+    reduced_features = pca.fit_transform(features)
+    return reduced_features
+
+def calculate_optimal_clusters(reduced_features, max_clusters=10):
+    # Store the scores
+    wcss = []  # Inertia/Within Cluster Sum of Squares for Elbow Method
+    silhouette_scores = []
+    davies_bouldin_scores = []
+    
+    for n_clusters in range(2, max_clusters+1):
+        kmeans = KMeans(n_clusters=n_clusters, random_state=42).fit(reduced_features)
+        labels = kmeans.labels_
+        
+        # Elbow method (WCSS)
+        wcss.append(kmeans.inertia_)
+        
+        # Silhouette Score
+        silhouette_scores.append(silhouette_score(reduced_features, labels))
+        
+        # Davies-Bouldin Index
+        davies_bouldin_scores.append(davies_bouldin_score(reduced_features, labels))
+    
+    # Determine optimal cluster value based on the 3 methods
+    optimal_clusters = determine_best_cluster_value(wcss, silhouette_scores, davies_bouldin_scores)
+    
+    # Optionally, plot the three graphs to visualize
+    plot_clustering_scores(wcss, silhouette_scores, davies_bouldin_scores, max_clusters)
+    
+    return optimal_clusters
+
+def determine_best_cluster_value(wcss, silhouette_scores, davies_bouldin_scores):
+    # Logic to choose the best number of clusters based on the three scores
+    # This can be a weighted average or simple rules such as:
+    
+    best_silhouette_index = np.argmax(silhouette_scores)
+    best_db_index = np.argmin(davies_bouldin_scores)
+    
+    # Here we'll use an average ranking system
+    combined_ranks = np.argsort(wcss) + np.argsort(-np.array(silhouette_scores)) + np.argsort(davies_bouldin_scores)
+    
+    # The lowest rank indicates the most balanced solution across metrics
+    optimal_clusters = np.argmin(combined_ranks) + 2  # +2 because the range starts at 2 clusters
+    return optimal_clusters
+
+def plot_clustering_scores(wcss, silhouette_scores, davies_bouldin_scores, max_clusters):
+    clusters_range = range(2, max_clusters+1)
+
+    plt.figure(figsize=(16, 5))
+    
+    # Elbow Method Plot
+    plt.subplot(1, 3, 1)
+    plt.plot(clusters_range, wcss, marker='o')
+    plt.title("Elbow Method for Optimal Clusters")
+    plt.xlabel("Number of clusters")
+    plt.ylabel("WCSS (Inertia)")
+    
+    # Silhouette Score Plot
+    plt.subplot(1, 3, 2)
+    plt.plot(clusters_range, silhouette_scores, marker='o')
+    plt.title("Silhouette Score for Optimal Clusters")
+    plt.xlabel("Number of clusters")
+    plt.ylabel("Silhouette Score")
+    
+    # Davies-Bouldin Index Plot
+    plt.subplot(1, 3, 3)
+    plt.plot(clusters_range, davies_bouldin_scores, marker='o')
+    plt.title("Davies-Bouldin Index for Optimal Clusters")
+    plt.xlabel("Number of clusters")
+    plt.ylabel("Davies-Bouldin Index")
+    
+    plt.tight_layout()
+    plt.show()
+
+def cluster_images(reduced_features, optimal_clusters):
+    kmeans = KMeans(n_clusters=optimal_clusters, random_state=42).fit(reduced_features)
+    return kmeans.labels_
+
+def select_images_for_modeling(labels, images, n_samples_per_cluster=5):
+    # Select a certain number of images from each cluster
+    selected_images = []
+    
+    for cluster in np.unique(labels):
+        cluster_indices = np.where(labels == cluster)[0]
+        selected_indices = np.random.choice(cluster_indices, n_samples_per_cluster, replace=False)
+        selected_images.append(images[selected_indices])
+    
+    # Flatten the list
+    selected_images = np.concatenate(selected_images, axis=0)
+    
+    return selected_images
+
+def active_learning_loop(images, labels, initial_model, target_accuracy=0.90, max_iterations=10):
+    iteration = 0
+    best_model = None
+    best_accuracy = 0
+    
+    while iteration < max_iterations and best_accuracy < target_accuracy:
+        # Incrementally add more data to the model (pseudo-active learning)
+        # Assuming that the images are labeled and we have a dataset
+        X_train, X_test, y_train, y_test = train_test_split(images, labels, test_size=0.3)
+        
+        # Train the model
+        initial_model.fit(X_train, y_train)
+        
+        # Evaluate the model
+        accuracy = initial_model.score(X_test, y_test)
+        print(f"Iteration {iteration + 1}, Accuracy: {accuracy:.2f}")
+        
+        if accuracy > best_accuracy:
+            best_accuracy = accuracy
+            best_model = initial_model
+        
+        iteration += 1
+    
+    return best_model
+
+# Example of how to tie everything together
+def run_pipeline(images, initial_model):
+    # Step 1: Extract Features
+    features = extract_features(images)
+    
+    # Step 2: Reduce Dimensionality
+    reduced_features = reduce_dimensionality(features)
+    
+    # Step 3: Determine Optimal Clusters
+    optimal_clusters = calculate_optimal_clusters(reduced_features)
+    
+    # Step 4: Cluster Images
+    labels = cluster_images(reduced_features, optimal_clusters)
+    
+    # Step 5: Select Images for Model
+    selected_images = select_images_for_modeling(labels, images)
+    
+    # Step 6: Active Learning Loop
+    best_model = active_learning_loop(selected_images, labels, initial_model)
+    
+    return best_model
+
+# Example usage:
+# images = load_images()  # Load your images here
+initial_model = RandomForestClassifier(random_state=42)  # Placeholder model
+# best_model = run_pipeline(images, initial_model)
