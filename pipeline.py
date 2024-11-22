@@ -228,7 +228,7 @@ for cluster_label in range(n_clusters):
     create_yaml_for_cluster(cluster_label)
 
 # ------------------------- Étape 7 : Génération des commandes pour YOLOv5 -------------------------
-def print_yolov5_commands_for_cluster(cluster_label):
+""" def print_yolov5_commands_for_cluster(cluster_label):
     yaml_filepath = os.path.join("..", "dataset", "cluster", f"cluster_{cluster_label}", "dataset.yaml")
     command = [
         "python", "train.py",
@@ -251,4 +251,45 @@ def print_yolov5_commands_for_cluster(cluster_label):
 for cluster_label in range(n_clusters):
     print_yolov5_commands_for_cluster(cluster_label)
 
-print("exécutez les commandes dans le terminal où se situe le yolov5.")
+print("ces commandes vont être executer dans le terminal où se situe le yolov5.") """
+
+
+
+import subprocess
+
+def run_yolov5_training(cluster_label):
+    # Définir le chemin vers le fichier YAML
+    yaml_filepath = os.path.join("..", "dataset", "cluster", f"cluster_{cluster_label}", "dataset.yaml")
+    
+    # Définir la commande à exécuter
+    train_command = (
+        f"python train.py --img 640 --batch-size 16 --epochs 50 "
+        f"--data {yaml_filepath} --weights yolov5s.pt "
+        f"--project model2_yolo5_cluster_{cluster_label} "
+        f"--name experiment_cluster_{cluster_label} --exist-ok --device cpu --save-period 5"
+    )
+    
+    # Changer le répertoire courant vers le dossier YOLOv5
+    os.chdir("yolov5")
+    
+    # Nom du fichier log
+    log_file = f"training_log_cluster_{cluster_label}.txt"
+    
+    # Lancer la commande et capturer les logs
+    with open(log_file, "w") as log:
+        process = subprocess.Popen(train_command, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+        
+        print(f"Début de l'entraînement pour le cluster {cluster_label}. Logs en temps réel :")
+        for line in process.stdout:
+            print(line, end="")  # Afficher les logs en temps réel dans la console
+            log.write(line)      # Enregistrer les logs dans un fichier
+        
+        process.wait()  # Attendre la fin de la commande
+        if process.returncode == 0:
+            print(f"\nEntraînement terminé avec succès pour le cluster {cluster_label}.\n")
+        else:
+            print(f"\nErreur lors de l'entraînement pour le cluster {cluster_label}. Vérifiez les logs.\n")
+
+
+for cluster_label in range(n_clusters):
+    run_yolov5_training(cluster_label)
