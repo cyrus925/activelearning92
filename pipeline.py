@@ -13,21 +13,15 @@ from sklearn.cluster import KMeans
 import matplotlib.pyplot as plt
 
 # ------------------------- Étape 1 : Traitement des annotations YOLO -------------------------
-# Définir les chemins
-#data_dir = "./labels-pals_all"
-
-
 # Demander à l'utilisateur de fournir le chemin du dossier contenant les données brutes
-data_dir = input("Veuillez entrer le chemin du dossier contenant les données brutes (ex: ./labels-pals_all) : ")
+data_dir = input("Veuillez entrer le chemin du dossier contenant les données brutes fournies par le client (ex: ./labels-pals_all) : ")
 
 # Vérifier si le chemin existe
 if not os.path.isdir(data_dir):
     print(f"Erreur : Le dossier '{data_dir}' n'existe pas. Veuillez vérifier le chemin.")
     exit(1)
 
-
-
-
+# Définir les répertoires de sortie
 output_dir = 'dataset'
 yolo5label_dir = os.path.join(output_dir, 'labels')
 output_image_dir = os.path.join(output_dir, 'images')
@@ -108,7 +102,6 @@ for file in os.listdir(data_dir):
 
 print("Traitement des fichiers JSON terminé. Les images et annotations sont organisées dans le dossier 'dataset'.")
 
-
 # ------------------------- Étape 2 : Extraction des features avec ResNet50 -------------------------
 # Charger le modèle ResNet50 pré-entraîné sans la dernière couche
 base_model = ResNet50(weights="imagenet", include_top=False, pooling="avg")
@@ -124,8 +117,8 @@ def extract_features(image_path):
     return features.flatten()
 
 # Récupérer les chemins des images
-image_folder = r"dataset/images"
-image_paths = [os.path.join(image_folder, img) for img in os.listdir(image_folder) if img.endswith((".jpg", ".png"))]
+
+image_paths = [os.path.join(output_image_dir, img) for img in os.listdir(output_image_dir) if img.endswith((".jpg", ".png"))]
 
 # Extraire les features pour toutes les images
 features = np.array([extract_features(img) for img in image_paths])
@@ -135,12 +128,10 @@ np.save("dataset/image_features.npy", features)
 
 print("Extraction des features terminée.")
 
-
 # ------------------------- Étape 3 : Réduction des features avec PCA -------------------------
 pca = PCA(n_components=0.95)
 reduced_features = pca.fit_transform(features)
 print("Dimensions après PCA :", reduced_features.shape)
-
 
 # ------------------------- Étape 4 : Clustering avec KMeans -------------------------
 n_clusters = 7
@@ -150,7 +141,6 @@ labels = kmeans.labels_
 
 print("Clustering terminé.")
 print(f"Labels de cluster pour chaque image : {labels}")
-
 
 # ------------------------- Étape 5 : Séparation des images par cluster et split (train, val, test) -------------------------
 output_base_dir = os.path.join(output_dir, 'cluster')
@@ -165,6 +155,7 @@ for img, cluster in zip(image_paths, labels):
 # Fonction pour copier les fichiers en divisant en train, val et test pour chaque cluster
 def copy_files_by_cluster(clusters_dict):
     for cluster_label, image_list in clusters_dict.items():
+        print("clusters_dict", clusters_dict.items())
         cluster_dir = os.path.join(output_base_dir, f"cluster_{cluster_label}")
         train_img_dir = os.path.join(cluster_dir, "train", "images")
         val_img_dir = os.path.join(cluster_dir, "val", "images")
@@ -190,13 +181,18 @@ def copy_files_by_cluster(clusters_dict):
 
         def move_files(image_list, dest_images_dir, dest_labels_dir):
             for image in image_list:
-                shutil.copy(os.path.join(output_image_dir, image), dest_images_dir)
+                shutil.copy(image, dest_images_dir)
+
+                # Copier le fichier d'annotation associé
                 label_file = image.replace('.jpg', '.txt').replace('.png', '.txt')
+                label_file = label_file.replace('images', 'labels')
                 label_path = os.path.join(yolo5label_dir, label_file)
-                if os.path.isfile(label_path):
-                    shutil.copy(label_path, dest_labels_dir)
-                else:
-                    print(f"Attention : le fichier d'annotation pour {image} est introuvable dans {yolo5label_dir}.")
+                print("label_file", label_file)
+                print("label_path", label_path)
+                #shutil.copy(label_path, dest_labels_dir)
+                shutil.copy(label_file, dest_labels_dir)
+
+                
 
         move_files(train_images, train_img_dir, train_label_dir)
         move_files(val_images, val_img_dir, val_label_dir)
@@ -207,7 +203,6 @@ def copy_files_by_cluster(clusters_dict):
 copy_files_by_cluster(clusters)
 
 print("Séparation des images par clusters et splits train, val, test terminée.")
-
 
 # ------------------------- Étape 6 : Création des fichiers YAML pour chaque cluster -------------------------
 nc = 2  # Nombre de classes
@@ -231,7 +226,6 @@ names: {names}
 
 for cluster_label in range(n_clusters):
     create_yaml_for_cluster(cluster_label)
-
 
 # ------------------------- Étape 7 : Génération des commandes pour YOLOv5 -------------------------
 def print_yolov5_commands_for_cluster(cluster_label):
