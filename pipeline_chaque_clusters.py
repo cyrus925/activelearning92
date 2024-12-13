@@ -332,7 +332,7 @@ def run_yolov5_training(cluster_label):
     
     # Définir la commande à exécuter
     train_command = (
-        f"python train.py --img 640 --batch-size 16 --epochs 1 "
+        f"python train.py --img 640 --batch-size 16 --epochs 100 "
         f"--data {yaml_filepath} --weights yolov5s.pt "
         f"--project model2_yolo5_cluster_{cluster_label} "
         f"--name experiment_cluster_{cluster_label} --exist-ok --device cpu --save-period 5"
