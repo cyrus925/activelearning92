@@ -90,8 +90,20 @@ def copy_images_to_output(selected_images, output_images_dir):
 # Copier les images sélectionnées dans le dossier de sortie
 copy_images_to_output(selected_images, output_images_dir)
 
+
+
+
+import datetime
+
+# Ajouter un horodatage pour rendre le nom unique
+current_time = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+project_name="model_yolo5"
+experiment_name="experiment"
+unique_name = f"detection_results_{current_time}"
+
+
 # Fonction pour lancer la détection YOLOv5
-def run_yolov5_detection(source_dir,project_name="model_yolo5", experiment_name="experiment",  weights_filename="best.pt"):
+def run_yolov5_detection(source_dir,unique_name, project_name="model_yolo5", experiment_name="experiment",  weights_filename="best.pt"):
     
     # Définir le chemin vers les poids du modèle
     weights_filepath = os.path.join("yolov5", project_name, experiment_name, "weights", weights_filename)
@@ -103,15 +115,16 @@ def run_yolov5_detection(source_dir,project_name="model_yolo5", experiment_name=
 
     # Définir la commande à exécuter
     detect_command = (
-        f"python yolov5/detect.py "
-        f"--source {source_dir} "
-        f"--weights {weights_filepath} "
-        f"--img-size 640 "
-        f"--project {project_name} "
-        f"--name detection_results "
-        f"--save-txt "
-        f"--conf-thres 0.07"
-    )
+    f"py -3.12 yolov5/detect.py "
+    f"--source {source_dir} "
+    f"--weights {weights_filepath} "
+    f"--img-size 640 "
+    f"--project {project_name} "
+    f"--name {unique_name} "
+    f"--save-txt "
+    f"--save-conf "
+)
+
 
 
     # Nom du fichier log
@@ -133,4 +146,219 @@ def run_yolov5_detection(source_dir,project_name="model_yolo5", experiment_name=
             print(f"\nErreur lors de la détection pour {experiment_name}. Vérifiez les logs.\n")
 
 
-run_yolov5_detection(source_dir=output_images_dir)
+run_yolov5_detection(output_images_dir,unique_name, project_name,experiment_name)
+
+
+
+
+
+import re
+import os
+from PIL import Image
+import os
+import pickle
+
+# Chemin des fichiers et dossiers
+# Construire le chemin dynamique vers le dossier des labels
+img_folder = os.path.join(project_name, unique_name)
+txt_folder = os.path.join(img_folder, "labels")
+output_dir = 'output_dataset'                        # Dossier contenant les fichiers pickle
+data_path = os.path.join(output_dir, "data_split.pkl")
+clusters_path = os.path.join(output_dir, "clusters.pkl")
+
+# Chargement des fichiers pickle
+with open(data_path, 'rb') as f:
+    data_dict = pickle.load(f)
+with open(clusters_path, 'rb') as f:
+    clusters = pickle.load(f)
+
+# Étape 1 : Lecture des scores de confiance depuis les fichiers YOLOv5
+confidence_scores = {}
+
+# Parcourir tous les fichiers .txt dans le dossier
+for txt_file in os.listdir(txt_folder):
+    if txt_file.endswith('.txt'):
+        txt_path = os.path.join(txt_folder, txt_file)
+        image_name = os.path.splitext(txt_file)[0] + '.jpg'  # Nom de l'image associée
+        with open(txt_path, 'r') as f:
+            lines = f.readlines()
+        # Extraire les scores de confiance
+        scores = []
+        for line in lines:
+            parts = line.strip().split()
+            if len(parts) > 5:  # Format attendu : class x_center y_center width height confidence
+                confidence = float(parts[5])
+                scores.append(confidence)
+        confidence_scores[image_name] = scores
+        
+
+
+# Deuxième boucle pour attribuer un score de 0 aux images sans fichier .txt
+all_images = [os.path.splitext(img)[0] + '.jpg' for img in os.listdir(img_folder)]  # Toutes les images dans txt_folder
+processed_images = set(confidence_scores.keys())  # Images déjà traitées
+unprocessed_images = set(all_images) - processed_images  # Images sans fichier .txt
+
+for image_name in unprocessed_images:
+    confidence_scores[image_name] = 0  # Pas de scores associés, liste vide
+
+# Affichage des scores de confiance (facultatif)
+for image, scores in confidence_scores.items():
+    print(f"Image: {image}, Scores de confiance: {scores}")
+
+# Étape 2 : Fonction pour convertir les valeurs en float
+def convert_to_float(value):
+    try:
+        return float(value)
+    except (ValueError, TypeError):
+        return 0.0  # Retourne 0.0 si la conversion échoue
+
+# Étape 3 : Fonction pour filtrer et trier les pires images
+def select_worst_images(results, limit=100):
+    """
+    Sélectionne les pires images en priorisant celles sans prédictions.
+    """
+    worst_images = []
+    images_no_predictions = []
+
+    for image, scores in results.items():
+        if not scores:  # Aucune prédiction
+            images_no_predictions.append((image, 0))  # Score nul
+        else:
+            min_score = min(scores)  # Prendre le score minimum
+            worst_images.append((image, min_score))
+
+    # Trier les deux listes
+    images_no_predictions.sort(key=lambda x: x[1])  # Pas nécessaire ici mais garde un ordre cohérent
+    worst_images.sort(key=lambda x: x[1])  # Trier par score croissant
+
+    # Prioriser les images sans prédictions
+    combined = images_no_predictions + worst_images
+    return combined[:limit]
+
+
+# Normalisation des noms d'images
+def normalize_image_name(image_name):
+    return os.path.basename(image_name)
+
+
+
+
+
+# Fonction pour inverser le dictionnaire des clusters
+def invert_clusters(clusters):
+    inverted_clusters = {}  # On veut associer chaque image à son cluster
+    for cluster_id, image_names in clusters.items():
+        for image_name in image_names:
+            inverted_clusters[image_name] = cluster_id  # Chaque image est associée à son cluster
+    return inverted_clusters
+
+clusters_invert = invert_clusters(clusters)
+# Normaliser les noms
+worst_images = [(normalize_image_name(img), score) for img, score in select_worst_images(confidence_scores, limit=100)]
+clusters_invert = {normalize_image_name(img): cluster for img, cluster in clusters_invert.items()}
+
+# Vérification des correspondances
+print("Noms normalisés et vérifications :")
+for img, score in worst_images:
+    if img not in clusters_invert:
+        print(f"Image {img} non trouvée dans clusters_invert.")
+
+
+
+
+
+# Dictionnaire pour compter les occurrences de chaque cluster
+cluster_counts = {}
+
+# Parcourir la liste worst_image et vérifier les clusters_invert
+for img_name, _ in worst_images:
+    for cluster_path, cluster_id in clusters_invert.items():
+        # Convertir la clé en chaîne si nécessaire
+        if not isinstance(cluster_path, str):
+            cluster_path = str(cluster_path)  # Convertir en chaîne de caractères
+            
+        cluster_name = os.path.basename(cluster_path)  # Extraire le nom du fichier du chemin complet
+        
+        # Comparer le nom de l'image dans worst_image avec le nom extrait du chemin dans clusters_invert
+        if img_name == cluster_name:
+            # Convertir la valeur numpy.int32 en int natif
+            cluster_id = int(cluster_id)
+            
+            # Compter les occurrences de chaque cluster
+            if cluster_id in cluster_counts:
+                cluster_counts[cluster_id] += 1
+            else:
+                cluster_counts[cluster_id] = 1
+
+print(cluster_counts)
+remaining_images = data_dict["remaining_images"]
+
+
+# Trier les clusters par fréquence (du plus fréquent au moins fréquent)
+sorted_clusters = sorted(cluster_counts.items(), key=lambda x: x[1], reverse=True)
+
+# Sélectionner les clusters les plus problématiques (ici on prend les clusters 1 et 2 comme exemple)
+problematic_clusters = [cluster_id for cluster_id, count in sorted_clusters[:2]]  # Prendre les 2 clusters les plus fréquents
+
+# Filtrer les images qui appartiennent aux clusters problématiques dans 'remaining_images'
+selected_images = []
+for cluster_id in problematic_clusters:
+    # Chercher toutes les images dans 'clusters_invert' associées à ce cluster
+    for image_name, assigned_cluster in clusters_invert.items():
+        if assigned_cluster == cluster_id and image_name in remaining_images:
+            selected_images.append(image_name)
+        # Limiter à 50 images
+        if len(selected_images) >= 50:
+            break
+    if len(selected_images) >= 50:
+        break
+
+
+
+
+# Dossier source où les images sont situées (par exemple dans 'remaining_images')
+source_dir = 'output_dataset/remaining_images'
+
+# Dossier cible où les images doivent être copiées
+target_dir = 'output_dataset/echantillon/images'
+import shutil
+import re
+def clean_image_name(image_name):
+
+    return re.sub(r'^images\\', '', image_name) #A CHANGER POUR CHAQUE TRUC
+
+# Copier chaque image de `selected_images` vers `échantillon/images`
+for image_name in selected_images:
+
+    cleaned_image_name = clean_image_name(image_name)
+    
+    source_path = os.path.join(source_dir, cleaned_image_name)  # Chemin complet de l'image source
+    target_path = os.path.join(target_dir, cleaned_image_name)  # Chemin complet de l'image cible
+    
+    # Vérifier si l'image existe avant de la copier
+    if os.path.exists(source_path):
+        shutil.move(source_path, target_path)  
+        print(f"Image {cleaned_image_name} copiée avec succès.")
+    else:
+        print(f"Image {cleaned_image_name} non trouvée dans le répertoire source.")
+
+
+train_images = data_dict['train']
+
+# Supprimer les images de `remaining_images` et les ajouter à `train`
+remaining_images = set(data_dict['remaining_images'])  # Convertir en ensemble pour permettre des suppressions rapides
+train_images = set(data_dict['train'])                # Convertir en ensemble pour éviter les doublons
+
+
+for image in selected_images:
+    if image in remaining_images:
+        remaining_images.remove(image)  # Retirer de remaining_images
+        train_images.add(image)         # Ajouter à train
+
+# Remettre les données sous forme de liste
+data_dict['remaining_images'] = list(remaining_images)
+data_dict['train'] = list(train_images)
+
+# Sauvegarder le fichier data_dict mis à jour
+with open(data_path, 'wb') as f:
+    pickle.dump(data_dict, f)
