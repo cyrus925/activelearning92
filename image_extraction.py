@@ -53,6 +53,7 @@ for filename in os.listdir(image_folder):
         
         # Ajouter les résultats de l'image dans le dictionnaire des résultats
         results_dict[filename] = image_classes
+        print(f"Résultats de l'image {filename}: {image_classes}")
 
 
 import pickle
