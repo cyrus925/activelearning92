@@ -185,7 +185,7 @@ print("Les fichiers d'entraînement ont été traités et copiés avec succès !
 
 
 
-shutil.rmtree(preprocessing_dir)
+#shutil.rmtree(preprocessing_dir)
 
 
 
@@ -229,7 +229,7 @@ yaml_filepath = os.path.join(current_directory, output_dir, "dataset.yaml")
 def run_yolov5_training(yaml_filepath, project_name="model_yolo5", experiment_name="experiment"):
     # Définir la commande à exécuter
     train_command = (
-        f"python train.py --img 640 --batch-size 16 --epochs 1 "
+        f"py -3.12 train.py --img 640 --batch-size 16 --epochs 5 "
         f"--data {yaml_filepath} --weights yolov5s.pt "
         f"--project {project_name} "
         f"--name {experiment_name} --exist-ok --device cpu --save-period 5"

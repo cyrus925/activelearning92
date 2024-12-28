@@ -18,7 +18,7 @@ def copy_random_files(src_dir, dest_dir, proportion=0.10):
 
 
     # Compter le nombre de fichiers dans le répertoire source
-    num_files_in_src = len([f for f in os.listdir(dest_directory) if os.path.isfile(os.path.join(src_dir, f))])
+    num_files_in_src = len([f for f in os.listdir(src_dir) if os.path.isfile(os.path.join(src_dir, f))])
     print(f"Nombre de fichiers dans le répertoire source : {num_files_in_src}")
 
 
@@ -59,13 +59,12 @@ def copy_random_files(src_dir, dest_dir, proportion=0.10):
         shutil.copy(src_file, dest_file)
     
 
-    num_files_in_src = len([f for f in os.listdir(dest_directory) if os.path.isfile(os.path.join(src_dir, f))])
+    num_files_in_src = len([f for f in os.listdir(src_dir) if os.path.isfile(os.path.join(src_dir, f))])
     print(f"Nombre de fichiers dans le répertoire : {num_files_in_src}")
 
 
 # Exemple d'utilisation
 src_directory = "labels-pals_all"  # Remplacez par le chemin réel de votre dataset
-dest_directory = "labels-pals_images"  # Remplacez par le chemin de destination
 
 copy_random_files(src_directory, "output_dataset/echantillon/labels")
 copy_random_files(src_directory, "output_dataset/test/labels")
