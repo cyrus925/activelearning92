@@ -1,7 +1,8 @@
 numpy==1.26.4
 opencv-python==4.10.0.84
 PyYAML==6.0.1
-tensorflow==2.15.0
+tensorflow
 scikit-learn==1.5.2
-easyocr==1.7.5
+easyocr
 Pillow==10.4.0
+pandas
