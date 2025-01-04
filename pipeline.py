@@ -128,56 +128,84 @@ for file in os.listdir(val_preprocessing_dir):
                 shutil.copy(image_path, output_image_dir_val)
 
 print("Les fichiers de validation ont été traités et copiés avec succès !")
+import os
+import json
+import shutil
+import cv2
 
-# Traiter les fichiers JSON et images dans train_preprocessing_dir
-for file in os.listdir(train_preprocessing_dir):
-    if file.endswith('.json'):
-        json_path = os.path.join(train_preprocessing_dir, file)
-        
-        with open(json_path) as f:
-            data = json.load(f)
-            image_path = os.path.join(train_preprocessing_dir, data['imagePath'])
+
+
+
+
+def process_files(val_preprocessing_dir, output_image_dir_train, yolo5label_dir_train, classes):
+    # Obtenez la liste des fichiers JSON pour un accès rapide
+    json_files = {os.path.splitext(f)[0] for f in os.listdir(val_preprocessing_dir) if f.endswith('.json')}
+    
+    # Traitez tous les fichiers dans le répertoire
+    for file in os.listdir(val_preprocessing_dir):
+        if file.endswith(('.jpg', '.png', '.jpeg')):  # Vérifiez les extensions d'image
+            image_name = os.path.splitext(file)[0]
+            image_path = os.path.join(val_preprocessing_dir, file)
             
-            # Vérifier si l'image existe
             if not os.path.isfile(image_path):
-                print(f"Image non trouvée pour : {data['imagePath']}, fichier JSON ignoré.")
+                print(f"Image non trouvée : {image_path}")
                 continue
             
-            img = cv2.imread(image_path)
-            if img is None:
-                print(f"Impossible de lire l'image : {image_path}, fichier JSON ignoré.")
-                continue
-            
-            img_height, img_width = img.shape[:2]
-            
-            # Préparer les données d'annotations YOLO
-            yolo_data = []
-            for shape in data['shapes']:
-                label = shape['label']
-                if label not in classes:
+            # Si l'image a un fichier JSON associé, traitez-le normalement
+            if image_name in json_files:
+                json_path = os.path.join(val_preprocessing_dir, image_name + '.json')
+                with open(json_path) as f:
+                    data = json.load(f)
+                    
+                img = cv2.imread(image_path)
+                if img is None:
+                    print(f"Impossible de lire l'image : {image_path}, fichier JSON ignoré.")
                     continue
-                class_id = classes.index(label)
                 
-                # Obtenir la boîte englobante des points du polygone
-                points = shape['points']
-                bbox = get_bounding_box_from_polygon(points)
+                img_height, img_width = img.shape[:2]
                 
-                # Convertir la boîte en format YOLO
-                yolo_bbox = convert_bbox((img_height, img_width), bbox)
-                yolo_data.append(f"{class_id} {' '.join(map(str, yolo_bbox))}\n")
-            
-            # Sauvegarder le fichier d'annotations YOLO si des données sont valides
-            if yolo_data:
-                yolo_filename = os.path.splitext(file)[0] + '.txt'
-                yolo_filepath = os.path.join(yolo5label_dir_train, yolo_filename)
-                with open(yolo_filepath, 'w') as yolo_file:
-                    yolo_file.writelines(yolo_data)
+                # Préparer les données d'annotations YOLO
+                yolo_data = []
+                for shape in data['shapes']:
+                    label = shape['label']
+                    if label not in classes:
+                        continue
+                    class_id = classes.index(label)
+                    
+                    # Obtenir la boîte englobante des points du polygone
+                    points = shape['points']
+                    bbox = get_bounding_box_from_polygon(points)
+                    
+                    # Convertir la boîte en format YOLO
+                    yolo_bbox = convert_bbox((img_height, img_width), bbox)
+                    yolo_data.append(f"{class_id} {' '.join(map(str, yolo_bbox))}\n")
+                
+                # Sauvegarder le fichier d'annotations YOLO si des données sont valides
+                if yolo_data:
+                    yolo_filename = image_name + '.txt'
+                    yolo_filepath = os.path.join(yolo5label_dir_train, yolo_filename)
+                    with open(yolo_filepath, 'w') as yolo_file:
+                        yolo_file.writelines(yolo_data)
                 
                 # Copier l'image dans le dossier des images de sortie
-                shutil.copy(image_path, output_image_dir_train)
+                output_image_path = os.path.join(output_image_dir_train, file)
+                if not os.path.exists(output_image_path):
+                    shutil.copy(image_path, output_image_dir_train)
+            
+            # Si l'image n'a pas de JSON, copiez-la directement
+            else:
+                print(f"Image sans JSON trouvée : {image_path}")
+                output_image_path = os.path.join(output_image_dir_train, file)
+                if not os.path.exists(output_image_path):
+                    shutil.copy(image_path, output_image_dir_train)
+
+    print("Traitement terminé. Toutes les images ont été copiées dans le dossier train.")
 
 
 
+
+
+process_files(train_preprocessing_dir, output_image_dir_train, yolo5label_dir_train, classes)
 
 print("Les fichiers d'entraînement ont été traités et copiés avec succès !")
 
@@ -186,9 +214,23 @@ print("Les fichiers d'entraînement ont été traités et copiés avec succès !
 
 
 #shutil.rmtree(preprocessing_dir)
+current_dir = os.getcwd()
+
+cache_file_path = os.path.join(current_dir, 'dataset_pipeline', 'preprocessing', 'train', 'labels.cache.npy')
+
+print(train_preprocessing_dir)  # Pour vérifier que le chemin est correct
 
 
-
+# Vérifier si le fichier existe
+if os.path.isfile(cache_file_path):
+    try:
+        # Supprimer le fichier
+        os.remove(cache_file_path)
+        print(f"Le fichier {cache_file_path} a été supprimé avec succès.")
+    except Exception as e:
+        print(f"Erreur lors de la suppression du fichier : {e}")
+else:
+    print(f"Le fichier {cache_file_path} n'existe pas.")
 
 
 

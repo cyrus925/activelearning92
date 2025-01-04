@@ -15,7 +15,7 @@ with open(data_file_path, 'rb') as f:
 
 import random
 
-def select_random_images_from_remaining(data, num_images=200):
+def select_random_images_from_remaining(data, num_images=100):
     """
     Sélectionne aléatoirement un nombre spécifié d'images à partir de 'remaining_images' dans le dictionnaire 'data'.
     
@@ -40,7 +40,7 @@ def select_random_images_from_remaining(data, num_images=200):
 
 
 # Sélectionner 200 images aléatoires
-selected_images = select_random_images_from_remaining(data, num_images=200)
+selected_images = select_random_images_from_remaining(data, num_images=80)
 
 import os
 import shutil
@@ -154,7 +154,7 @@ run_yolov5_detection(output_images_dir,unique_name, project_name,experiment_name
 
 import re
 import os
-from PIL import Image
+
 import os
 import pickle
 
@@ -194,7 +194,7 @@ for txt_file in os.listdir(txt_folder):
 
 
 # Deuxième boucle pour attribuer un score de 0 aux images sans fichier .txt
-all_images = [os.path.splitext(img)[0] + '.jpg' for img in os.listdir(img_folder)]  # Toutes les images dans txt_folder
+all_images = [img for img in os.listdir(img_folder) if img.endswith('.jpg')]
 processed_images = set(confidence_scores.keys())  # Images déjà traitées
 unprocessed_images = set(all_images) - processed_images  # Images sans fichier .txt
 
@@ -202,8 +202,8 @@ for image_name in unprocessed_images:
     confidence_scores[image_name] = 0  # Pas de scores associés, liste vide
 
 # Affichage des scores de confiance (facultatif)
-for image, scores in confidence_scores.items():
-    print(f"Image: {image}, Scores de confiance: {scores}")
+#for image, scores in confidence_scores.items():
+    #print(f"Image: {image}, Scores de confiance: {scores}")
 
 # Étape 2 : Fonction pour convertir les valeurs en float
 def convert_to_float(value):
@@ -257,11 +257,6 @@ clusters_invert = invert_clusters(clusters)
 worst_images = [(normalize_image_name(img), score) for img, score in select_worst_images(confidence_scores, limit=100)]
 clusters_invert = {normalize_image_name(img): cluster for img, cluster in clusters_invert.items()}
 
-# Vérification des correspondances
-print("Noms normalisés et vérifications :")
-for img, score in worst_images:
-    if img not in clusters_invert:
-        print(f"Image {img} non trouvée dans clusters_invert.")
 
 
 
@@ -290,7 +285,7 @@ for img_name, _ in worst_images:
             else:
                 cluster_counts[cluster_id] = 1
 
-print(cluster_counts)
+print("cluster_counts",cluster_counts)
 remaining_images = data_dict["remaining_images"]
 
 
@@ -299,13 +294,15 @@ sorted_clusters = sorted(cluster_counts.items(), key=lambda x: x[1], reverse=Tru
 
 # Sélectionner les clusters les plus problématiques (ici on prend les clusters 1 et 2 comme exemple)
 problematic_clusters = [cluster_id for cluster_id, count in sorted_clusters[:2]]  # Prendre les 2 clusters les plus fréquents
-
+print("problematic_clusters",problematic_clusters)
 # Filtrer les images qui appartiennent aux clusters problématiques dans 'remaining_images'
 selected_images = []
+
 for cluster_id in problematic_clusters:
+
     # Chercher toutes les images dans 'clusters_invert' associées à ce cluster
     for image_name, assigned_cluster in clusters_invert.items():
-        if assigned_cluster == cluster_id and image_name in remaining_images:
+        if int(assigned_cluster) == cluster_id and f"images\\{image_name}" in remaining_images: #A CHANGER POUR CHAQUE TRUC
             selected_images.append(image_name)
         # Limiter à 50 images
         if len(selected_images) >= 50:
@@ -331,7 +328,6 @@ def clean_image_name(image_name):
 for image_name in selected_images:
 
     cleaned_image_name = clean_image_name(image_name)
-    
     source_path = os.path.join(source_dir, cleaned_image_name)  # Chemin complet de l'image source
     target_path = os.path.join(target_dir, cleaned_image_name)  # Chemin complet de l'image cible
     
