@@ -2,6 +2,16 @@ import os
 import shutil
 import json
 import cv2
+
+
+from codecarbon import EmissionsTracker
+
+# Initialisation du tracker
+tracker = EmissionsTracker(output_file="pipeline5epochs.csv")
+# Démarrage du suivi
+tracker.start()
+
+
 # Chemins des répertoires d'entrée et de sortie
 train_dir = "output_dataset/echantillon"
 val_dir = "output_dataset/test"
@@ -80,54 +90,7 @@ os.makedirs(yolo5label_dir_train, exist_ok=True)
 os.makedirs(output_image_dir_val, exist_ok=True)
 os.makedirs(yolo5label_dir_val, exist_ok=True)
 
-# Traiter les fichiers JSON et images dans val_preprocessing_dir
-for file in os.listdir(val_preprocessing_dir):
-    if file.endswith('.json'):
-        json_path = os.path.join(val_preprocessing_dir, file)
-        
-        with open(json_path) as f:
-            data = json.load(f)
-            image_path = os.path.join(val_preprocessing_dir, data['imagePath'])
-            
-            # Vérifier si l'image existe
-            if not os.path.isfile(image_path):
-                print(f"Image non trouvée pour : {data['imagePath']}, fichier JSON ignoré.")
-                continue
-            
-            img = cv2.imread(image_path)
-            if img is None:
-                print(f"Impossible de lire l'image : {image_path}, fichier JSON ignoré.")
-                continue
-            
-            img_height, img_width = img.shape[:2]
-            
-            # Préparer les données d'annotations YOLO
-            yolo_data = []
-            for shape in data['shapes']:
-                label = shape['label']
-                if label not in classes:
-                    continue
-                class_id = classes.index(label)
-                
-                # Obtenir la boîte englobante des points du polygone
-                points = shape['points']
-                bbox = get_bounding_box_from_polygon(points)
-                
-                # Convertir la boîte en format YOLO
-                yolo_bbox = convert_bbox((img_height, img_width), bbox)
-                yolo_data.append(f"{class_id} {' '.join(map(str, yolo_bbox))}\n")
-            
-            # Sauvegarder le fichier d'annotations YOLO si des données sont valides
-            if yolo_data:
-                yolo_filename = os.path.splitext(file)[0] + '.txt'
-                yolo_filepath = os.path.join(yolo5label_dir_val, yolo_filename)
-                with open(yolo_filepath, 'w') as yolo_file:
-                    yolo_file.writelines(yolo_data)
-                
-                # Copier l'image dans le dossier des images de sortie
-                shutil.copy(image_path, output_image_dir_val)
 
-print("Les fichiers de validation ont été traités et copiés avec succès !")
 import os
 import json
 import shutil
@@ -137,15 +100,15 @@ import cv2
 
 
 
-def process_files(val_preprocessing_dir, output_image_dir_train, yolo5label_dir_train, classes):
+def process_files(train_preprocessing_dir, output_image_dir_train, yolo5label_dir_train, classes):
     # Obtenez la liste des fichiers JSON pour un accès rapide
-    json_files = {os.path.splitext(f)[0] for f in os.listdir(val_preprocessing_dir) if f.endswith('.json')}
+    json_files = {os.path.splitext(f)[0] for f in os.listdir(train_preprocessing_dir) if f.endswith('.json')}
     
     # Traitez tous les fichiers dans le répertoire
-    for file in os.listdir(val_preprocessing_dir):
+    for file in os.listdir(train_preprocessing_dir):
         if file.endswith(('.jpg', '.png', '.jpeg')):  # Vérifiez les extensions d'image
             image_name = os.path.splitext(file)[0]
-            image_path = os.path.join(val_preprocessing_dir, file)
+            image_path = os.path.join(train_preprocessing_dir, file)
             
             if not os.path.isfile(image_path):
                 print(f"Image non trouvée : {image_path}")
@@ -153,7 +116,7 @@ def process_files(val_preprocessing_dir, output_image_dir_train, yolo5label_dir_
             
             # Si l'image a un fichier JSON associé, traitez-le normalement
             if image_name in json_files:
-                json_path = os.path.join(val_preprocessing_dir, image_name + '.json')
+                json_path = os.path.join(train_preprocessing_dir, image_name + '.json')
                 with open(json_path) as f:
                     data = json.load(f)
                     
@@ -206,33 +169,23 @@ def process_files(val_preprocessing_dir, output_image_dir_train, yolo5label_dir_
 
 
 process_files(train_preprocessing_dir, output_image_dir_train, yolo5label_dir_train, classes)
+process_files(val_preprocessing_dir, output_image_dir_val, yolo5label_dir_val, classes)
 
 print("Les fichiers d'entraînement ont été traités et copiés avec succès !")
 
 
+def verifier_doublons(train_dir, val_dir):
+    train_images = set(os.listdir(train_dir))
+    val_images = set(os.listdir(val_dir))
+    
+    doublons = train_images.intersection(val_images)
+    if doublons:
+        print(f"Attention : Les fichiers suivants sont présents dans les deux ensembles : {doublons}")
+    else:
+        print("Aucun doublon détecté entre les ensembles d'entraînement et de validation.")
 
-
-
-#shutil.rmtree(preprocessing_dir)
-current_dir = os.getcwd()
-
-cache_file_path = os.path.join(current_dir, 'dataset_pipeline', 'preprocessing', 'train', 'labels.cache.npy')
-
-print(train_preprocessing_dir)  # Pour vérifier que le chemin est correct
-
-
-# Vérifier si le fichier existe
-if os.path.isfile(cache_file_path):
-    try:
-        # Supprimer le fichier
-        os.remove(cache_file_path)
-        print(f"Le fichier {cache_file_path} a été supprimé avec succès.")
-    except Exception as e:
-        print(f"Erreur lors de la suppression du fichier : {e}")
-else:
-    print(f"Le fichier {cache_file_path} n'existe pas.")
-
-
+# Vérifiez les doublons
+verifier_doublons(output_image_dir_train, output_image_dir_val)
 
 
 import yaml
@@ -269,6 +222,8 @@ yaml_filepath = os.path.join(current_directory, output_dir, "dataset.yaml")
 
 # Fonction pour lancer l'entraînement YOLOv5
 def run_yolov5_training(yaml_filepath, project_name="model_yolo5", experiment_name="experiment"):
+    install_command = f"py -3.12 -m pip install -r yolov5/requirements.txt"
+    subprocess.run(install_command, shell=True, check=True)
     # Définir la commande à exécuter
     train_command = (
         f"py -3.12 train.py --img 640 --batch-size 16 --epochs 5 "
@@ -304,52 +259,33 @@ def run_yolov5_training(yaml_filepath, project_name="model_yolo5", experiment_na
 
 
 
+
+import os
+
+def delete_cache_files(directory):
+    # Parcours du dossier et de ses sous-dossiers
+    for root, dirs, files in os.walk(directory):
+        for file in files:
+            # Vérifie si le fichier est un fichier cache
+            if file.endswith('labels.cache'):
+                file_path = os.path.join(root, file)
+                try:
+                    os.remove(file_path)  # Supprime le fichier
+                    print(f"Supprimé : {file_path}")
+                except Exception as e:
+                    print(f"Erreur lors de la suppression de {file_path}: {e}")
+
+delete_cache_files(output_dir)
+
+
+
+
+
+
 # Appeler la fonction d'entraînement
 run_yolov5_training(yaml_filepath)
 
 
-import os
-import subprocess
-
-# Fonction pour lancer la validation YOLOv5
-def run_yolov5_validation(yaml_filepath, project_name="model_yolo5", experiment_name="experiment", weights_filename="best.pt"):
-    # Définir le chemin vers les poids du modèle
-    weights_filepath = os.path.join("yolov5", project_name, experiment_name, "weights", weights_filename)
-    
-    # Vérifier si le fichier de poids existe
-    if not os.path.exists(weights_filepath):
-        print(f"Erreur : Le fichier de poids {weights_filepath} n'existe pas.")
-        return
-    
-    # Définir la commande à exécuter
-    val_command = (
-        f"python yolov5/val.py --weights {weights_filepath} --img 640 "
-        f"--data {yaml_filepath} "
-    )
-
-
-    # Nom du fichier log
-    log_file = f"{experiment_name}_validation_log.txt"
-
-    # Lancer la commande et capturer les logs
-    with open(log_file, "w") as log:
-        process = subprocess.Popen(val_command, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
-
-        print(f"Début de la validation pour {experiment_name}. Logs en temps réel :")
-        for line in process.stdout:
-            print(line, end="")  # Afficher les logs en temps réel dans la console
-            log.write(line)      # Enregistrer les logs dans un fichier
-
-        process.wait()  # Attendre la fin de la commande
-        if process.returncode == 0:
-            print(f"\nValidation terminée avec succès pour {experiment_name}.\n")
-        else:
-            print(f"\nErreur lors de la validation pour {experiment_name}. Vérifiez les logs.\n")
-
-
-
-# Appeler la fonction de validation
-run_yolov5_validation(yaml_filepath)
 
 import pandas as pd 
 import re
@@ -357,7 +293,7 @@ import re
 
 # Fonction pour extraire les résultats de validation du fichier log dans un DataFrame
 def extract_validation_results_from_log(experiment_name="experiment"):
-    log_file_path = f"{experiment_name}_validation_log.txt"
+    log_file_path = f"yolov5/{experiment_name}_training_log.txt"
 
     """Extraire les résultats du fichier log de validation dans un DataFrame"""
     with open(log_file_path, "r") as log_file:
@@ -386,10 +322,17 @@ def extract_validation_results_from_log(experiment_name="experiment"):
 # Extraire les résultats de la validation du fichier log
 results = extract_validation_results_from_log()
 
-print(results)
+results = results.drop(index=0).reset_index(drop=True)
 
-results.to_csv('results.csv', index=False)
+from datetime import datetime
 
+# Générer un nom de fichier avec un timestamp
+timestamp = datetime.now().strftime('%Y-%m-%d_%H-%M-%S')  # Format : année-mois-jour_heure-minute-seconde
+file_name = f'results-{timestamp}.csv'
+
+results.to_csv(file_name, index=False)
+
+print(f"Fichier sauvegardé sous : {file_name}")
 
 
 # Fonction pour vider le contenu d'un dossier
@@ -414,3 +357,8 @@ dossier2 = os.path.join(train_dir, "labels")
 
 vider_dossier(dossier1)
 vider_dossier(dossier2)
+
+
+
+tracker.stop()
+

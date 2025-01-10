@@ -1,6 +1,10 @@
 import pickle
 import subprocess
 
+
+source_image="labels-pals_images"
+
+
 # Chemin du fichier pickle dans le répertoire 'output_dataset'
 pickle_file_path = 'output_dataset/clusters.pkl'
 data_file_path = 'output_dataset/data_split.pkl'
@@ -40,7 +44,7 @@ def select_random_images_from_remaining(data, num_images=100):
 
 
 # Sélectionner 200 images aléatoires
-selected_images = select_random_images_from_remaining(data, num_images=80)
+selected_images = select_random_images_from_remaining(data, num_images=10)
 
 import os
 import shutil
@@ -105,6 +109,8 @@ unique_name = f"detection_results_{current_time}"
 # Fonction pour lancer la détection YOLOv5
 def run_yolov5_detection(source_dir,unique_name, project_name="model_yolo5", experiment_name="experiment",  weights_filename="best.pt"):
     
+    install_command = f"py -3.12 -m pip install -r yolov5/requirements.txt"
+    subprocess.run(install_command, shell=True, check=True)
     # Définir le chemin vers les poids du modèle
     weights_filepath = os.path.join("yolov5", project_name, experiment_name, "weights", weights_filename)
 
@@ -302,7 +308,7 @@ for cluster_id in problematic_clusters:
 
     # Chercher toutes les images dans 'clusters_invert' associées à ce cluster
     for image_name, assigned_cluster in clusters_invert.items():
-        if int(assigned_cluster) == cluster_id and f"images\\{image_name}" in remaining_images: #A CHANGER POUR CHAQUE TRUC
+        if int(assigned_cluster) == cluster_id and f"{source_image}\\{image_name}" in remaining_images: #A CHANGER POUR CHAQUE TRUC
             selected_images.append(image_name)
         # Limiter à 50 images
         if len(selected_images) >= 50:
@@ -320,14 +326,14 @@ source_dir = 'output_dataset/remaining_images'
 target_dir = 'output_dataset/echantillon/images'
 import shutil
 import re
-def clean_image_name(image_name):
-
-    return re.sub(r'^images\\', '', image_name) #A CHANGER POUR CHAQUE TRUC
+def clean_image_name(image_name, source_image):
+    # Utilisation de re.sub pour enlever la partie source_image du nom de l'image
+    return re.sub(f'^{re.escape(source_image)}\\/', '', image_name)
 
 # Copier chaque image de `selected_images` vers `échantillon/images`
-for image_name in selected_images:
 
-    cleaned_image_name = clean_image_name(image_name)
+for image_name in selected_images:
+    cleaned_image_name = clean_image_name(image_name, source_image)
     source_path = os.path.join(source_dir, cleaned_image_name)  # Chemin complet de l'image source
     target_path = os.path.join(target_dir, cleaned_image_name)  # Chemin complet de l'image cible
     
@@ -358,3 +364,4 @@ data_dict['train'] = list(train_images)
 # Sauvegarder le fichier data_dict mis à jour
 with open(data_path, 'wb') as f:
     pickle.dump(data_dict, f)
+
