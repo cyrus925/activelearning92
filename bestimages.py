@@ -2,7 +2,18 @@ import pickle
 import subprocess
 
 
-source_image="labels-pals_images"
+
+
+from configparser import ConfigParser
+
+# Charger la configuration
+config = ConfigParser()
+config.read("config.ini")
+
+
+
+source_image = config["preprocessing"]["data_dir"]
+
 
 
 # Chemin du fichier pickle dans le répertoire 'output_dataset'
@@ -42,9 +53,9 @@ def select_random_images_from_remaining(data, num_images=100):
     return selected_images
 
 
-
+nb_images_aleatoires=int(config["bestimages"]["nb_images_pour_tester"])
 # Sélectionner 200 images aléatoires
-selected_images = select_random_images_from_remaining(data, num_images=10)
+selected_images = select_random_images_from_remaining(data, num_images=nb_images_aleatoires)
 
 import os
 import shutil
@@ -207,10 +218,6 @@ unprocessed_images = set(all_images) - processed_images  # Images sans fichier .
 for image_name in unprocessed_images:
     confidence_scores[image_name] = 0  # Pas de scores associés, liste vide
 
-# Affichage des scores de confiance (facultatif)
-#for image, scores in confidence_scores.items():
-    #print(f"Image: {image}, Scores de confiance: {scores}")
-
 # Étape 2 : Fonction pour convertir les valeurs en float
 def convert_to_float(value):
     try:
@@ -260,7 +267,9 @@ def invert_clusters(clusters):
 
 clusters_invert = invert_clusters(clusters)
 # Normaliser les noms
-worst_images = [(normalize_image_name(img), score) for img, score in select_worst_images(confidence_scores, limit=100)]
+
+nb_worst_images = int(config["bestimages"]["worst_images"])
+worst_images = [(normalize_image_name(img), score) for img, score in select_worst_images(confidence_scores, limit=nb_worst_images)]
 clusters_invert = {normalize_image_name(img): cluster for img, cluster in clusters_invert.items()}
 
 
@@ -298,12 +307,15 @@ remaining_images = data_dict["remaining_images"]
 # Trier les clusters par fréquence (du plus fréquent au moins fréquent)
 sorted_clusters = sorted(cluster_counts.items(), key=lambda x: x[1], reverse=True)
 
+
+nb_clusters_les_plus_fréquents=int(config["bestimages"]["nb_clusters_les_plus_frequents"])
 # Sélectionner les clusters les plus problématiques (ici on prend les clusters 1 et 2 comme exemple)
-problematic_clusters = [cluster_id for cluster_id, count in sorted_clusters[:2]]  # Prendre les 2 clusters les plus fréquents
+problematic_clusters = [cluster_id for cluster_id, count in sorted_clusters[:nb_clusters_les_plus_fréquents]]  # Prendre les 2 clusters les plus fréquents
 print("problematic_clusters",problematic_clusters)
 # Filtrer les images qui appartiennent aux clusters problématiques dans 'remaining_images'
 selected_images = []
 
+nb_images_à_annoter = int(config["bestimages"]["nb_images_a_annoter"])
 for cluster_id in problematic_clusters:
 
     # Chercher toutes les images dans 'clusters_invert' associées à ce cluster
@@ -311,9 +323,9 @@ for cluster_id in problematic_clusters:
         if int(assigned_cluster) == cluster_id and f"{source_image}\\{image_name}" in remaining_images: #A CHANGER POUR CHAQUE TRUC
             selected_images.append(image_name)
         # Limiter à 50 images
-        if len(selected_images) >= 50:
+        if len(selected_images) >= nb_images_à_annoter:
             break
-    if len(selected_images) >= 50:
+    if len(selected_images) >= nb_images_à_annoter:
         break
 
 

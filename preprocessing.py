@@ -13,9 +13,18 @@ from sklearn.decomposition import PCA
 from sklearn.cluster import KMeans
 from sklearn.metrics import silhouette_score, davies_bouldin_score
 
+
+from configparser import ConfigParser
+
+# Charger la configuration
+config = ConfigParser()
+config.read("config.ini")
+
+
+
 # ------------------------- Étape 1 : Traitement des annotations YOLO -------------------------
 # Demander à l'utilisateur de fournir le chemin du dossier contenant les données brutes
-data_dir = "labels-pals_images"
+data_dir = config["preprocessing"]["data_dir"]
 
 # Vérifier si le chemin existe
 if not os.path.isdir(data_dir):
@@ -61,12 +70,14 @@ print("Extraction des features terminée.")
 
 # ------------------------- Étape 3 : Réduction des features avec PCA -------------------------
 
+
 pca = PCA(n_components=0.95)
 reduced_features = pca.fit_transform(features)
 print("Dimensions après PCA :", reduced_features.shape)
 
 # ------------------------- Étape 4 : Clustering avec KMeans -------------------------
-n_clusters = 10
+
+n_clusters = int(config["preprocessing"]["nb_clusters"])
 
 kmeans = KMeans(n_clusters=n_clusters, random_state=0)
 kmeans.fit(reduced_features)
@@ -127,11 +138,15 @@ def select_common_test_images(clusters_dict, test_proportion=0.15):
 
 # Sélection des images de test communes
 
+
+
 # Sélectionner 10 % comme échantillon global
-sampled_images, clusters_after_sampling = select_common_test_images(clusters, test_proportion=0.10)
+ratio_sample = float(config["preprocessing"]["ratio_first_sample"])
+sampled_images, clusters_after_sampling = select_common_test_images(clusters, test_proportion=ratio_sample)
 
 # Sélectionner 20 % des images restantes comme ensemble de test
-test_images, remaining_clusters = select_common_test_images(clusters_after_sampling, test_proportion=0.20)
+ratio_sample_test = float(config["preprocessing"]["ratio_sample_test"])
+test_images, remaining_clusters = select_common_test_images(clusters_after_sampling, test_proportion=ratio_sample_test)
 
 
 # Fonction pour créer les dossiers 'images' et 'labels' vides
@@ -203,3 +218,5 @@ with open(data_path, "wb") as f:
 
 print(f"Dictionnaire des clusters sauvegardé dans : {clusters_path}")
 print(f"Dictionnaire data_split sauvegardé dans : {data_path}")
+
+

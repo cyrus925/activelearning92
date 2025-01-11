@@ -4,13 +4,6 @@ import json
 import cv2
 
 
-from codecarbon import EmissionsTracker
-
-# Initialisation du tracker
-tracker = EmissionsTracker(output_file="pipeline5epochs.csv")
-# Démarrage du suivi
-tracker.start()
-
 
 # Chemins des répertoires d'entrée et de sortie
 train_dir = "output_dataset/echantillon"
@@ -220,13 +213,17 @@ import subprocess
 current_directory = os.getcwd()
 yaml_filepath = os.path.join(current_directory, output_dir, "dataset.yaml")
 
-# Fonction pour lancer l'entraînement YOLOv5
-def run_yolov5_training(yaml_filepath, project_name="model_yolo5", experiment_name="experiment"):
+from configparser import ConfigParser
+config = ConfigParser()
+config.read("config.ini")
+epochs=int(config["training"]["epochs"])
+
+def run_yolov5_training(yaml_filepath,epochs =5, project_name="model_yolo5", experiment_name="experiment"):
     install_command = f"py -3.12 -m pip install -r yolov5/requirements.txt"
     subprocess.run(install_command, shell=True, check=True)
     # Définir la commande à exécuter
     train_command = (
-        f"py -3.12 train.py --img 640 --batch-size 16 --epochs 5 "
+        f"py -3.12 train.py --img 640 --batch-size 16 --epochs {epochs} "
         f"--data {yaml_filepath} --weights yolov5s.pt "
         f"--project {project_name} "
         f"--name {experiment_name} --exist-ok --device cpu --save-period 5"
@@ -283,7 +280,7 @@ delete_cache_files(output_dir)
 
 
 # Appeler la fonction d'entraînement
-run_yolov5_training(yaml_filepath)
+run_yolov5_training(yaml_filepath,epochs=epochs)
 
 
 
@@ -322,8 +319,17 @@ def extract_validation_results_from_log(experiment_name="experiment"):
 # Extraire les résultats de la validation du fichier log
 results = extract_validation_results_from_log()
 
-results = results.drop(index=0).reset_index(drop=True)
 
+# Filtrer les lignes pour 'label' et 'pal'
+filtered_rows = results[results["Class"].isin(["label", "pal"])]
+
+# Filtrer les lignes pour 'all' et sélectionner la dernière
+last_all = results[results["Class"] == "all"].iloc[-1]
+
+# Ajouter la dernière ligne de 'all' aux lignes filtrées
+result_df = pd.concat([filtered_rows, last_all.to_frame().T], ignore_index=True)
+
+# Sauvegarder le résultat dans un fichier CSV
 from datetime import datetime
 
 # Générer un nom de fichier avec un timestamp
@@ -359,6 +365,4 @@ vider_dossier(dossier1)
 vider_dossier(dossier2)
 
 
-
-tracker.stop()
 
