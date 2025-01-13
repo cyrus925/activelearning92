@@ -3,7 +3,13 @@ import shutil
 import json
 import cv2
 
+from codecarbon import EmissionsTracker
 
+# Initialiser le tracker de CodeCarbon avec les paramètres appropriés
+tracker = EmissionsTracker(output_dir=".", output_file="pipelien5epoch2p.csv")
+
+# Démarrer le suivi des émissions
+tracker.start()
 
 # Chemins des répertoires d'entrée et de sortie
 train_dir = "output_dataset/echantillon"
@@ -319,15 +325,14 @@ def extract_validation_results_from_log(experiment_name="experiment"):
 # Extraire les résultats de la validation du fichier log
 results = extract_validation_results_from_log()
 
+# Sélectionner la première ligne
+first_row = results.iloc[:1]
 
-# Filtrer les lignes pour 'label' et 'pal'
-filtered_rows = results[results["Class"].isin(["label", "pal"])]
+# Sélectionner les trois dernières lignes
+last_three_rows = results.tail(3)
 
-# Filtrer les lignes pour 'all' et sélectionner la dernière
-last_all = results[results["Class"] == "all"].iloc[-1]
-
-# Ajouter la dernière ligne de 'all' aux lignes filtrées
-result_df = pd.concat([filtered_rows, last_all.to_frame().T], ignore_index=True)
+# Combiner la première ligne et les trois dernières lignes
+results = pd.concat([first_row, last_three_rows], ignore_index=True)
 
 # Sauvegarder le résultat dans un fichier CSV
 from datetime import datetime
@@ -366,3 +371,4 @@ vider_dossier(dossier2)
 
 
 
+tracker.stop()
